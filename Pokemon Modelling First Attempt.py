@@ -112,7 +112,8 @@ print(x)
 y = mrd_final.iloc[:, 15].values
 print(y)
 
-x_train, x_test, y_train, y_test = train_test_split(x, y, test_size = 0.2, random_state = 0)
+#x_train, x_test, y_train, y_test = train_test_split(x, y, test_size = 0.2, random_state = 0)
+x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.25, random_state=42)
 
 print(x_train.shape)
 print(y_train.shape)
@@ -120,23 +121,45 @@ print(x_test.shape)
 print(y_test.shape)
 
 # Multiple Linear Regression Model
-def multiple_linear_regression(x_train, x_test, y_train, y_test):
-    # Fitting Multiple Linear Regression to the Training set
-    from sklearn.linear_model import LinearRegression
+# def multiple_linear_regression(x_train, x_test, y_train, y_test):
+#     # Fitting Multiple Linear Regression to the Training set
+#     from sklearn.linear_model import LinearRegression
+#
+#     regressor = LinearRegression()
+#     regressor.fit(x_train, y_train)
+#
+#     print(regressor.score(x_train, y_train))
+#
+#     # Predicting the Test set results
+#     y_pred = regressor.predict(x_test)
+#
+#     # Validating the results
+#     from sklearn.metrics import mean_absolute_error
+#     from math import sqrt
+#     mae = mean_absolute_error(y_test, y_pred)
+#     #print("Mean Absolute Error: " + str(mae))
+#     return mae
 
-    regressor = LinearRegression()
-    regressor.fit(x_train, y_train)
+# multiple_linear_regression(x_train, x_test, y_train, y_test)
 
-    print(regressor.score(x_train, y_train))
+from sklearn.metrics import accuracy_score
+from sklearn.linear_model import LogisticRegression
+from sklearn.naive_bayes import GaussianNB
+from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier, GradientBoostingClassifier
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.svm import LinearSVC
+from sklearn.tree import DecisionTreeClassifier
 
-    # Predicting the Test set results
-    y_pred = regressor.predict(x_test)
+clf_dict = {'log reg': LogisticRegression(),
+            'naive bayes': GaussianNB(),
+            'random forest': RandomForestClassifier(n_estimators=100),
+            'knn': KNeighborsClassifier(),
+            'linear svc': LinearSVC(),
+            'ada boost': AdaBoostClassifier(n_estimators=100),
+            'gradient boosting': GradientBoostingClassifier(n_estimators=100),
+            'CART': DecisionTreeClassifier()}
 
-    # Validating the results
-    from sklearn.metrics import mean_absolute_error
-    from math import sqrt
-    mae = mean_absolute_error(y_test, y_pred)
-    #print("Mean Absolute Error: " + str(mae))
-    return mae
-
-multiple_linear_regression(x_train, x_test, y_train, y_test)
+for name, clf in clf_dict.items():
+    model = clf.fit(x_train, y_train)
+    pred = model.predict(x_test)
+    print('Accuracy of {}:'.format(name), accuracy_score(pred, y_test))
