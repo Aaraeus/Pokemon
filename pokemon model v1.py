@@ -273,7 +273,7 @@ cwd = os.getcwd()
 print(cwd)
 
 
-def final_winner(df):
+def final_winner_name(df):
     if pd.isnull(df['pw1']) and not pd.isnull(df['pw2']):
         return df['Name1']
     elif pd.isnull(df['pw2']) and not pd.isnull(df['pw1']):
@@ -283,11 +283,22 @@ def final_winner(df):
     else:
         return df['Name1']
 
+def final_winner(df):
+    if pd.isnull(df['pw1']) and not pd.isnull(df['pw2']):
+        return df['Number1']
+    elif pd.isnull(df['pw2']) and not pd.isnull(df['pw1']):
+        return df['Number1']
+    elif df['pw2'] > df['pw1']:
+        return df['Number2']
+    else:
+        return df['Number1']
+
+pw2['Winner_name'] = pw2.apply(final_winner_name, axis=1)
 pw2['Winner'] = pw2.apply(final_winner, axis=1)
 
 print(list(pw2))
 
-final_result_detailed = pw2[['First_pokemon', 'Second_pokemon', 'Name1', 'Name2', 'pw1', 'pw2', 'Winner']]
+final_result_detailed = pw2[['First_pokemon', 'Second_pokemon', 'Name1', 'Name2', 'pw1', 'pw2', 'Winner', 'Winner_name']]
 final_result = pw2[['First_pokemon', 'Second_pokemon', 'Winner']]
 
 
