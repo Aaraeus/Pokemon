@@ -3,8 +3,13 @@ import pandas as pd  #data processing, CSV file I/O (e.g. pd.read_csv)
 import matplotlib.pyplot as plt
 import seaborn as sns  # visualization tool
 from sklearn.model_selection import train_test_split #model selection
+from scipy import stats
 
-loc = 'C:\\Users\\Kintesh\\Desktop\\code\\kaggle\\pokemon\\'
+# Tutorial used to base this off
+# https://www.kaggle.com/mmetter/pokemon-data-analysis-tutorial
+
+
+loc = "C:\\Users\\G01132617\\Desktop\\kaggle\\pokemon\\"
 
 combats = pd.read_csv(loc + "combats.csv")
 pokemon = pd.read_csv(loc + "pokemon.csv")
@@ -16,20 +21,41 @@ pokemon = pokemon.rename(index=str, columns={"#": "Number"})
 
 # Also change combats to show who won - 0 for the first pokemon, and 1 for the second
 
-
-def test_func(df):
+def boolean_func(df):
     """ Test Function for generating new value"""
     if df['Winner'] == df['First_pokemon']:
         return 0
     elif df['Winner'] == df['Second_pokemon']:
         return 1
+    
 
+def normality_test(df,var):
+    plt.figure(figsize=(6,8))
+    plt.subplot(211)
+    sns.distplot(df[var], fit=stats.norm)
+    plt.subplot(212)
+    stats.probplot(df[var], plot=plt)
+    plt.tight_layout()
+    #plt.savefig('C:/Users/G01180794/Desktop/python_out/%s.png' % var, dpi=400)
+    plt.show()
+    print('Skewness: %f' % df[var].skew())
+    print('Kurtosis: %f' % df[var].kurt())
+    
+# STATISTICAL TEST - TREND/FIT
+    
+def trend(df,var1,var2):
+    plt.figure()
+    sns.jointplot(x=df[var1], y=df[var2], kind='reg')
+    #plt.savefig('C:/Users/G01180794/Desktop/python_out/%s.png' % var, dpi=400)
+    plt.show()
+    print('Skewness: %f' % df[var1].skew())
+    print('Kurtosis: %f' % df[var1].kurt())
+    
 
-combats['winner_boolean'] = combats.apply(test_func, axis=1)
+combats['winner_boolean'] = combats.apply(boolean_func, axis=1)
 
 # Quick view of datasets
 print(pokemon.head(n=5))
-
 print(combats.head(n=5))
 
 print("Dimensions of Pokemon: " + str(pokemon.shape))
@@ -50,7 +76,7 @@ print("This pokemon is after the missing Pokemon: " + pokemon['Name'][63])
 pokemon['Name'][62] = "Primeape"
 
 # Check row is updated - iloc does integer values
-# pokemon.iloc[[62]]
+pokemon.iloc[[62]]
 
 # START ANALYSING THE DATASET BY FEATURE ENGINEERING - WHAT VARIABLES MIGHT I WANT?
 print(pokemon.info())
@@ -61,9 +87,18 @@ numberOfWins = combats.groupby('Winner').count()
 countByFirst = combats.groupby('Second_pokemon').count()
 countBySecond = combats.groupby('First_pokemon').count()
 
+# Drop boolean field because we're just counting for no reason.
+numberOfWins = numberOfWins.drop(['winner_boolean'],axis=1)
+numberOfWins['Winner'] = numberOfWins.index
+
+
 numberOfWins['total_fights'] = countByFirst.Winner + countBySecond.Winner
 numberOfWins['win_pct'] = numberOfWins.First_pokemon/numberOfWins['total_fights']
 
+print(list(pokemon))
+print(list(numberOfWins))
+
+print(pokemon.head(n=5))
 print(numberOfWins.head(n=5))
 
 # Merge to create an MRD (Model Ready Dataset)
@@ -72,12 +107,10 @@ print("Merge prep:")
 print("Pokemon Shape: " + str(pokemon.shape))
 print("numberOfWins Shape: " + str(numberOfWins.shape))
 
-mrd = pokemon.merge(numberOfWins,how='left',left_on='Number',right_on='Winner',
-                    left_index=False, right_index=False, sort=True,
-                    suffixes=('_x', '_y'), copy=True, indicator=True,validate=None)
+mrd = pd.merge(pokemon,numberOfWins,how='left',left_on ='Number', right_on='Winner',indicator=True)
+mrd.drop(['Winner'],axis=1)
 
 # Also merge back on the boolean winner since this has been messed up by our grouping...
-
 print(list(mrd))
 
 # Change all NaNs to 0 in win_count
@@ -101,6 +134,7 @@ col = ['Type 1', 'HP', 'Attack', 'Defense', 'Sp. Atk', 'Sp. Def', 'Speed', 'win_
 sns.pairplot(mrd.loc[:, col].dropna())
 plt.show()
 
+
 # Correlation table
 mrd.loc[:,col].corr()
 
@@ -117,19 +151,30 @@ print(mrd.head(n=5))
 #remove rows with NA values because it will cause errors when fitting to the model
 mrd_final = mrd.dropna(axis=0, how='any')
 
-print(list(mrd_final))
+
+# Normality test on win_pct
+normality_test(mrd_final,'win_pct')
+
+
+mrd_final['SpeedAndAtk']=mrd_final['Speed']+mrd_final['Attack']
+
+print(mrd_final)
+# Trend
+
+trend(mrd_final,'Speed','win_pct')
+trend(mrd_final,'SpeedAndAtk','win_pct')
+
 
 # Take main stat variables as x
-x = mrd_final.iloc[:, 5:11].values
+featEngVars = ['HP', 'Attack', 'Defense', 'Sp. Atk', 'Sp. Def', 'Speed']
+
+x = mrd_final[featEngVars]
 print(x)
 
-# Take winner_boolean in y... but check it's in col 14 first
-print(list(mrd_final)[14])
 
-y = mrd_final.iloc[:, 14].values
+y = mrd_final['win_pct']
 print(y)
 
-print(mrd_final['winner_boolean'])
 
 #x_train, x_test, y_train, y_test = train_test_split(x, y, test_size = 0.2, random_state = 0)
 x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.25, random_state=42)
@@ -140,60 +185,72 @@ print(x_test.shape)
 print(y_test.shape)
 
 print(y_train)
-# Encode values to int so they work with sklearn
-from sklearn import preprocessing
-from sklearn import utils
 
-lab_enc = preprocessing.LabelEncoder()
-y_train_enc = lab_enc.fit_transform(y_train)
+# Random forest
+from sklearn.ensemble import RandomForestRegressor
 
-print(y_train_enc)
+# RANDOM FOREST VARIABLE IMPORTANCE
+     
+def variable_importance(classif):
+    importance = classif.feature_importances_
+    importance = pd.DataFrame(importance, index=x.columns, 
+                              columns=["Importance"])
+    importance = importance.sort_values(['Importance'], ascending=[0])
+    plt.subplots(figsize=(12,10))
+    sns.barplot(importance['Importance'], importance.index)
+    #plt.savefig('C:/Users/G01180794/Desktop/python_out/importance.png', dpi=400)
+    plt.show()
 
-# y train encoded
-print(utils.multiclass.type_of_target(y_train_enc))
+
+rf = RandomForestRegressor(n_estimators=200, max_depth=12, random_state=0)
+rf.fit(x, y)
+importance = rf.feature_importances_
+df = variable_importance(rf)
+
+#
+## Encode values to int so they work with sklearn
+#from sklearn import preprocessing
+#from sklearn import utils
+#
+#lab_enc = preprocessing.LabelEncoder()
+#y_train_enc = lab_enc.fit_transform(y_train)
+#
+#print(y_train_enc)
+#
+## y train encoded
+#print(utils.multiclass.type_of_target(y_train_enc))
 
 
-# Perform linear regression on win_pct to find our new values
+''' LINEAR REGRESSION '''
 
 from sklearn.linear_model import LinearRegression
 
 regressor = LinearRegression()
 regressor.fit(x_train, y_train)
-print(regressor.score(x_train, y_train))
+print(regressor.score(x, y))
 
-y_pred = regressor.predict(x_test)
+y_pred = regressor.predict(x)
 
 # Validating the results using mean absolute error
 
 from sklearn.metrics import mean_absolute_error
 
-mae = mean_absolute_error(y_test, y_pred)
+mae = mean_absolute_error(y_train, y_pred)
 print("Mean Absolute Error: " + str(mae))
 
 
-# Try LogReg model
+# Root mean square error
+from sklearn.model_selection import cross_val_score,KFold
 
-from sklearn.linear_model import LogisticRegression
+    
+def cross_val_rmse(folds, model, data_set, features, target):
+    kf = KFold(folds, shuffle=True, random_state=42).get_n_splits(data_set.values)
+    rmse = np.sqrt(-cross_val_score(model, features.values, 
+                                    target.values, 
+                                    scoring="neg_mean_squared_error", cv=kf))
+    return("Score: {:.4f}({:.4f})".format(rmse.mean(), rmse.std()))
 
-regressor = LogisticRegression()
-regressor.fit(x_train, y_train)
-print(regressor.score(x_train, y_train))
-
-y_pred = regressor.predict(x_test)
-
-# OK, now that we have a modelling method, let's just model on the whole dataset so we can see the win_pct values populated
-
-print(x.shape)
-print(y.shape)
-print(test_01.shape)
-model = regressor.fit(x,y)
-prediction = model.predict()
-
-# Populated the test01 table that we were asked to do in the first place
-
-test_01['Winner'] = prediction
-test_01['Winner'][test_01['Winner'] <0.5] = test_01['First_pokemon']
-test_01['Winner'][test_01['Winner'] >=0.5] = test_01['Second_pokemon']
+cross_val_rmse(3, regressor, mrd_final, x, y)
 
 # FOR LATER WHEN I WANNA TRY TO AUTOMATE THIS BAD BOI
 # from sklearn.metrics import accuracy_score
@@ -221,4 +278,5 @@ test_01['Winner'][test_01['Winner'] >=0.5] = test_01['Second_pokemon']
 #     pred = model.predict(x_test)
 #     print('Accuracy of {}:'.format(name), accuracy_score(pred, y_test))
 #
+
 
